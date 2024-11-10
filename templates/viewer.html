@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viewer - PDF</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            max-width: 80%;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #0077cc;
+        }
+        #pdf-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .controls button {
+            background-color: #0077cc;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .controls button:hover {
+            background-color: #005fa3;
+        }
+    </style>
+    <!-- Include PDF.js and Socket.io -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF Viewer</h1>
+        <div class="controls">
+            <button onclick="zoomIn()">Zoom In</button>
+            <button onclick="zoomOut()">Zoom Out</button>
+        </div>
+        <p>Current Page: <span id="page-num">1</span> / <span id="total-pages">0</span></p>
+        <div id="pdf-container"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        let pdfDoc = null;
+        let currentPage = 1;
+        let scale = 1.0; // Initial zoom level
+        const url = "/uploads/{{ filename }}"; // Use the Flask-provided filename
+        const pdfContainer = document.getElementById('pdf-container');
+        const pageNumElement = document.getElementById('page-num');
+        const totalPagesElement = document.getElementById('total-pages');
+
+        // Load the PDF
+        pdfjsLib.getDocument(url).promise.then(function(pdf) {
+            pdfDoc = pdf;
+            totalPagesElement.textContent = pdf.numPages;
+            renderPage(currentPage);
+        }).catch(function(error) {
+            console.error("Error loading PDF:", error);
+        });
+
+        // Function to render the current page with scaling
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({ scale: scale });
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                pdfContainer.innerHTML = '';
+                pdfContainer.appendChild(canvas);
+
+                page.render({ canvasContext: ctx, viewport: viewport }).promise.then(() => {
+                    pageNumElement.textContent = num;
+                });
+            }).catch(function(error) {
+                console.error("Error rendering page:", error);
+            });
+        }
+
+        // Zoom In Function
+        function zoomIn() {
+            scale += 0.2;
+            renderPage(currentPage);
+        }
+
+        // Zoom Out Function
+        function zoomOut() {
+            if (scale > 0.4) { // Prevent zooming out too much
+                scale -= 0.2;
+                renderPage(currentPage);
+            }
+        }
+
+
+
+        // Listen for page updates from the admin via WebSockets
+        socket.on('update_viewer', function(data) {
+            currentPage = data.page;
+            renderPage(currentPage);
+        });
+    </script>
+</body>
+</html>

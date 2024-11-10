@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Upload PDF</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        /* General Styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f8ff;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 30px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #0077cc;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #28a745;
+            margin-top: 20px;
+        }
+        form {
+            margin-bottom: 30px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        label {
+            display: inline-block;
+            background-color: #0077cc;
+            color: #fff;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        label:hover {
+            background-color: #005fa3;
+        }
+        button {
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .nav-buttons button {
+            background-color: #0077cc;
+        }
+        .nav-buttons button:hover {
+            background-color: #005fa3;
+        }
+        .link-button {
+            display: inline-block;
+            background-color: #ff9800;
+            color: #fff;
+            padding: 12px 25px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-top: 20px;
+        }
+        .link-button:hover {
+            background-color: #e68a00;
+        }
+        .pdf-container {
+            margin-top: 30px;
+        }
+        #pdf-container {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        p {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Panel - Upload PDF</h1>
+
+        <!-- Form to Upload PDF -->
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" id="file-input" accept="application/pdf" required>
+            <label for="file-input">Choose PDF</label>
+            <button type="submit">Upload PDF</button>
+        </form>
+
+        {% if unique_id %}
+        <h2>PDF Uploaded Successfully!</h2>
+        <a href="{{ url_for('viewer', unique_id=unique_id) }}" target="_blank" class="link-button">
+            Open Full-Screen Viewer
+        </a>
+        {% endif %}
+
+        <!-- PDF Preview Section -->
+        <div class="pdf-container">
+            <h2>Preview PDF</h2>
+            <div class="nav-buttons">
+                <button onclick="prevPage()">Previous Page</button>
+                <button onclick="nextPage()">Next Page</button>
+                <button onclick="zoomIn()">Zoom In</button>
+                <button onclick="zoomOut()">Zoom Out</button>
+            </div>
+            <p>Current Page: <span id="page-num">1</span></p>
+            <div id="pdf-container"></div>
+        </div>
+    </div>
+
+    <!-- JavaScript to Handle PDF Rendering, Navigation, and Zooming -->
+    <script>
+        const socket = io();
+        let pdfDoc = null;
+        let pageNum = 1;
+        let scale = 1.5; // Initial scale for zooming
+        const url = "/uploads/{{ session['filename'] }}";
+        const pageNumElement = document.getElementById('page-num');
+        const pdfContainer = document.getElementById('pdf-container');
+
+        // Load and Render the PDF
+        pdfjsLib.getDocument(url).promise.then(pdf => {
+            pdfDoc = pdf;
+            renderPage(pageNum);
+        });
+
+        // Function to Render the Current Page
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(page => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const viewport = page.getViewport({ scale: scale });
+
+                // Clear previous content
+                pdfContainer.innerHTML = '';
+
+                // Adjust canvas size and render the page
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                pdfContainer.appendChild(canvas);
+                page.render({ canvasContext: ctx, viewport: viewport });
+
+                // Update the current page number
+                pageNumElement.textContent = num;
+            });
+        }
+
+        // Navigate to Previous Page
+        function prevPage() {
+            if (pageNum > 1) {
+                pageNum--;
+                renderPage(pageNum);
+                socket.emit('change_page', { page: pageNum });
+            }
+        }
+
+        // Navigate to Next Page
+        function nextPage() {
+            if (pageNum < pdfDoc.numPages) {
+                pageNum++;
+                renderPage(pageNum);
+                socket.emit('change_page', { page: pageNum });
+            }
+        }
+
+        // Zoom In Functionality
+        function zoomIn() {
+            if (scale < 3) { // Maximum zoom level
+                scale += 0.2;
+                renderPage(pageNum);
+            }
+        }
+
+        // Zoom Out Functionality
+        function zoomOut() {
+            if (scale > 0.5) { // Minimum zoom level
+                scale -= 0.2;
+                renderPage(pageNum);
+            }
+        }
+    </script>
+</body>
+</html>
