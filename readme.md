@@ -1,4 +1,4 @@
-### README: PDF Viewer with Flask and Socket.IO
+### PDF Viewer with Flask and Socket.IO
 
 ---
 
